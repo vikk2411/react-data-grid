@@ -2,14 +2,13 @@ const React                   = require('react');
 import PropTypes from 'prop-types';
 const createReactClass = require('create-react-class');
 const joinClasses              = require('classnames');
-const keyboardHandlerMixin    = require('../KeyboardHandlerMixin');
+const keyboardHandler    = require('../KeyboardHandler');
 const SimpleTextEditor        = require('./SimpleTextEditor');
 const isFunction              = require('../utils/isFunction');
 require('../../../../themes/react-data-grid-core.css');
 
 const EditorContainer = createReactClass({
   displayName: 'EditorContainer',
-  mixins: [keyboardHandlerMixin],
 
   propTypes: {
     rowIdx: PropTypes.number,
@@ -303,4 +302,4 @@ const EditorContainer = createReactClass({
   }
 });
 
-module.exports = EditorContainer;
+module.exports = keyboardHandler(EditorContainer);

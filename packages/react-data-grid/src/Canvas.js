@@ -2,7 +2,6 @@ const React = require('react');
 const ReactDOM = require('react-dom');
 const joinClasses = require('classnames');
 const PropTypes = React.PropTypes;
-const ScrollShim = require('./ScrollShim');
 const Row = require('./Row');
 const cellMetaDataShape = require('./PropTypeShapes/CellMetaDataShape');
 const RowUtils = require('./RowUtils');

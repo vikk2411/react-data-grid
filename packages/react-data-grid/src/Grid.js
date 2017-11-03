@@ -3,8 +3,6 @@ import PropTypes from 'prop-types';
 const createReactClass = require('create-react-class');
 const Header               = require('./Header');
 const Viewport             = require('./Viewport');
-const GridScrollMixin      = require('./GridScrollMixin');
-const DOMMetrics           = require('./DOMMetrics');
 const cellMetaDataShape    = require('./PropTypeShapes/CellMetaDataShape');
 require('../../../themes/react-data-grid-core.css');
 
@@ -62,10 +60,139 @@ const Grid = createReactClass({
     overScan: PropTypes.object
   },
 
-  mixins: [
-    GridScrollMixin,
-    DOMMetrics.MetricsComputatorMixin
-  ],
+  componentWillMount() {
+    this._scrollLeft = undefined;
+    this._DOMMetrics = {
+      metrics: {},
+      components: []
+    };
+  },
+
+  componentDidMount() {
+    if (window.addEventListener) {
+      window.addEventListener('resize', this.updateMetrics);
+    } else {
+      window.attachEvent('resize', this.updateMetrics);
+    }
+    this.updateMetrics();
+    this._scrollLeft = this.viewport ? this.viewport.getScroll().scrollLeft : 0;
+    this._onScroll();
+  },
+
+  componentWillUnmount() {
+    this._scrollLeft = undefined;
+    window.removeEventListener('resize', this.updateMetrics);
+  },
+
+  componentDidUpdate() {
+    this._onScroll();
+  },
+
+  onScroll(props) {
+    if (this._scrollLeft !== props.scrollLeft) {
+      this._scrollLeft = props.scrollLeft;
+      this._onScroll();
+    }
+  },
+
+  onHeaderScroll(e) {
+    let scrollLeft = e.target.scrollLeft;
+    if (this._scrollLeft !== scrollLeft) {
+      this._scrollLeft = scrollLeft;
+      this.header.setScrollLeft(scrollLeft);
+      let canvas = ReactDOM.findDOMNode(this.viewport.canvas);
+      canvas.scrollLeft = scrollLeft;
+      this.viewport.canvas.setScrollLeft(scrollLeft);
+    }
+  },
+
+  _onScroll() {
+    if (this._scrollLeft !== undefined) {
+      this.header.setScrollLeft(this._scrollLeft);
+      if (this.viewport) {
+        this.viewport.setScrollLeft(this._scrollLeft);
+      }
+    }
+  },
+
+  childContextTypes: {
+    metricsComputator: PropTypes.object
+  },
+
+  getChildContext() {
+    return {metricsComputator: this};
+  },
+
+  getMetricImpl(name) {
+    return this._DOMMetrics.metrics[name].value;
+  },
+
+  registerMetricsImpl(component, metrics) {
+    let getters = {};
+    let s = this._DOMMetrics;
+
+    for (let name in metrics) {
+      if (s.metrics[name] !== undefined) {
+        throw new Error('DOM metric ' + name + ' is already defined');
+      }
+      s.metrics[name] = {component, computator: metrics[name].bind(component)};
+      getters[name] = this.getMetricImpl.bind(null, name);
+    }
+
+    if (s.components.indexOf(component) === -1) {
+      s.components.push(component);
+    }
+
+    return getters;
+  },
+
+  unregisterMetricsFor(component) {
+    let s = this._DOMMetrics;
+    let idx = s.components.indexOf(component);
+
+    if (idx > -1) {
+      s.components.splice(idx, 1);
+
+      let name;
+      let metricsToDelete = {};
+
+      for (name in s.metrics) {
+        if (s.metrics[name].component === component) {
+          metricsToDelete[name] = true;
+        }
+      }
+
+      for (name in metricsToDelete) {
+        if (metricsToDelete.hasOwnProperty(name)) {
+          delete s.metrics[name];
+        }
+      }
+    }
+  },
+
+  updateMetrics() {
+    let s = this._DOMMetrics;
+
+    let needUpdate = false;
+
+    for (let name in s.metrics) {
+      if (!s.metrics.hasOwnProperty(name)) continue;
+
+      let newMetric = s.metrics[name].computator();
+      if (newMetric !== s.metrics[name].value) {
+        needUpdate = true;
+      }
+      s.metrics[name].value = newMetric;
+    }
+
+    if (needUpdate) {
+      for (let i = 0, len = s.components.length; i < len; i++) {
+        if (s.components[i].metricsUpdated) {
+          s.components[i].metricsUpdated();
+        }
+      }
+    }
+  },
 
   getDefaultProps() {
     return {
@@ -74,7 +201,7 @@ const Grid = createReactClass({
     };
   },
 
-  getStyle: function(): { overflow: string; outline: number; position: string; minHeight: number } {
+  getStyle: function() {
     return {
       overflow: 'hidden',
       outline: 0,
@@ -83,7 +210,7 @@ const Grid = createReactClass({
     };
   },
 
-  render(): ?ReactElement {
+  render() {
     let headerRows = this.props.headerRows || [{ref: (node) => this.row = node}];
     let EmptyRowsView = this.props.emptyRowsView;
 

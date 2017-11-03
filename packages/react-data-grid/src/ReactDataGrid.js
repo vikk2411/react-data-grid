@@ -1,14 +1,11 @@
 const React                 = require('react');
 import PropTypes from 'prop-types';
+import ColumnMetrics from './ColumnMetrics';
 const createReactClass = require('create-react-class');
 const ReactDOM = require('react-dom');
 const BaseGrid              = require('./Grid');
-const Row                   = require('./Row');
-const ExcelColumn           = require('./PropTypeShapes/ExcelColumn');
-const KeyboardHandlerMixin  = require('./KeyboardHandlerMixin');
+const keyboardHandler  = require('./KeyboardHandler');
 const CheckboxEditor        = require('./editors/CheckboxEditor');
-const DOMMetrics           = require('./DOMMetrics');
-const ColumnMetricsMixin      = require('./ColumnMetricsMixin');
 const RowUtils = require('./RowUtils');
 const ColumnUtils = require('./ColumnUtils');
 const KeyCodes = require('./KeyCodes');
@@ -17,41 +14,9 @@ import AppConstants from './AppConstants';
 require('../../../themes/react-data-grid-core.css');
 require('../../../themes/react-data-grid-checkbox.css');
 
-if (!Object.assign) {
-  Object.assign = require('object-assign');
-}
-
-type SelectedType = {
-  rowIdx: number;
-  idx: number;
-};
-
-type ColumnEvent = {
-  name: string,
-  rowIdx: number;
-  idx: number;
-}
-
-type DraggedType = {
-  idx: number;
-  rowIdx: number;
-  value: string;
-};
-
-type RowUpdateEvent = {
-  keyCode: string;
-  changed: {expandedHeight: number};
-  rowIdx: number;
-};
 
 const ReactDataGrid = createReactClass({
   displayName: 'ReactDataGrid',
-
-  mixins: [
-    ColumnMetricsMixin,
-    DOMMetrics.MetricsComputatorMixin,
-    KeyboardHandlerMixin
-  ],
 
   propTypes: {
     rowHeight: PropTypes.number.isRequired,
@@ -119,7 +84,7 @@ const ReactDataGrid = createReactClass({
     onAddSubRow: PropTypes.func
   },
 
-  getDefaultProps(): {enableCellSelect: boolean} {
+  getDefaultProps() {
     return {
       enableCellSelect: false,
       tabIndex: -1,
@@ -135,11 +100,13 @@ const ReactDataGrid = createReactClass({
         colsEnd: 5,
         rowsStart: 5,
         rowsEnd: 5
-      }
+      },
+      minColumnWidth: 80,
+      columnEquality: ColumnMetrics.sameColumn
     };
   },
 
-  getInitialState: function(): {selected: SelectedType; copied: ?{idx: number; rowIdx: number}; selectedRows: Array<Row>; expandedRows: Array<Row>; canFilter: boolean; columnFilters: any; sortDirection: ?SortType; sortColumn: ?ExcelColumn; dragged: ?DraggedType;  } {
+  getInitialState: function() {
     let columnMetrics = this.createColumnMetrics();
     let initialState = {columnMetrics, selectedRows: [], copied: null, expandedRows: [], canFilter: false, columnFilters: {}, sortDirection: null, sortColumn: null, dragged: null, scrollOffset: 0, lastRowIdxUiSelected: -1};
     if (this.props.enableCellSelect) {
@@ -150,18 +117,97 @@ const ReactDataGrid = createReactClass({
     return initialState;
   },
 
-  hasSelectedCellChanged: function(selected: SelectedType) {
+  gridWidth() {
+    return this._mounted ? ReactDOM.findDOMNode(this).parentElement.offsetWidth : 0;
+  },
+
+  componentDidMount() {
+    this._mounted = true;
+  },
+
+  componentWillReceiveProps(nextProps) {
+    if (nextProps.columns) {
+      if (!ColumnMetrics.sameColumns(this.props.columns, nextProps.columns, this.props.columnEquality) ||
+          nextProps.minWidth !== this.props.minWidth) {
+        let columnMetrics = this.createColumnMetrics(nextProps);
+        this.setState({columnMetrics: columnMetrics});
+      }
+    }
+  },
+
+  getTotalWidth() {
+    let totalWidth = 0;
+    if (this._mounted) {
+      totalWidth = this.gridWidth();
+    } else {
+      totalWidth = ColumnUtils.getSize(this.props.columns) * this.props.minColumnWidth;
+    }
+    return totalWidth;
+  },
+
+  getColumnMetricsType(metrics) {
+    let totalWidth = metrics.totalWidth || this.getTotalWidth();
+    let currentMetrics = {
+      columns: metrics.columns,
+      totalWidth: totalWidth,
+      minColumnWidth: metrics.minColumnWidth
+    };
+    let updatedMetrics = ColumnMetrics.recalculate(currentMetrics);
+    return updatedMetrics;
+  },
+
+  getColumn(idx) {
+    let columns = this.state.columnMetrics.columns;
+    if (Array.isArray(columns)) {
+      return columns[idx];
+    }else if (typeof Immutable !== 'undefined') {
+      return columns.get(idx);
+    }
+  },
+
+  getSize() {
+    let columns = this.state.columnMetrics.columns;
+    if (Array.isArray(columns)) {
+      return columns.length;
+    }else if (typeof Immutable !== 'undefined') {
+      return columns.size;
+    }
+  },
+
+  metricsUpdated() {
+    let columnMetrics = this.createColumnMetrics();
+    this.setState({columnMetrics});
+  },
+
+  createColumnMetrics(props = this.props) {
+    let gridColumns = this.setupGridColumns(props);
+    return this.getColumnMetricsType({
+      columns: gridColumns,
+      minColumnWidth: this.props.minColumnWidth,
+      totalWidth: props.minWidth
+    });
+  },
+
+  onColumnResize(index: number, width: number) {
+    let columnMetrics = ColumnMetrics.resizeColumn(this.state.columnMetrics, index, width);
+    this.setState({columnMetrics});
+    if (this.props.onColumnResize) {
+      this.props.onColumnResize(index, width);
+    }
+  },
+
+  hasSelectedCellChanged(selected) {
     let previouslySelected = Object.assign({}, this.state.selected);
     return previouslySelected.rowIdx !== selected.rowIdx || previouslySelected.idx !== selected.idx || previouslySelected.active === false;
   },
 
-  onContextMenuHide: function() {
+  onContextMenuHide() {
     document.removeEventListener('click', this.onContextMenuHide);
     let newSelected = Object.assign({}, this.state.selected, {contextMenuDisplayed: false});
     this.setState({selected: newSelected});
   },
 
-  onColumnEvent: function(ev :SyntheticEvent, columnEvent: ColumnEvent) {
+  onColumnEvent: function(ev, columnEvent) {
     let {idx, name} = columnEvent;
 
     if (name && typeof idx !== 'undefined') {
@@ -180,7 +226,7 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  onSelect: function(selected: SelectedType) {
+  onSelect: function(selected) {
     if (this.state.selected.rowIdx !== selected.rowIdx
       || this.state.selected.idx !== selected.idx
       || this.state.selected.active === false) {
@@ -203,7 +249,7 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  onCellClick: function(cell: SelectedType, e: SyntheticEvent) {
+  onCellClick: function(cell, e) {
     this.onSelect({rowIdx: cell.rowIdx, idx: cell.idx});
 
     if (this.props.onRowClick && typeof this.props.onRowClick === 'function') {
@@ -215,14 +261,14 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  onCellContextMenu: function(cell: SelectedType) {
+  onCellContextMenu: function(cell) {
     this.onSelect({rowIdx: cell.rowIdx, idx: cell.idx, contextMenuDisplayed: this.props.contextMenu});
     if (this.props.contextMenu) {
       document.addEventListener('click', this.onContextMenuHide);
     }
   },
 
-  onCellDoubleClick: function(cell: SelectedType, e: SyntheticEvent) {
+  onCellDoubleClick: function(cell, e) {
     this.onSelect({rowIdx: cell.rowIdx, idx: cell.idx});
     this.setActive();
     if (e) {
@@ -230,50 +276,50 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  onPressArrowUp(e: SyntheticEvent) {
+  onPressArrowUp(e) {
     this.moveSelectedCell(e, -1, 0);
   },
 
-  onPressArrowDown(e: SyntheticEvent) {
+  onPressArrowDown(e) {
     this.moveSelectedCell(e, 1, 0);
   },
 
-  onPressArrowLeft(e: SyntheticEvent) {
+  onPressArrowLeft(e) {
     this.moveSelectedCell(e, 0, -1);
   },
 
-  onPressArrowRight(e: SyntheticEvent) {
+  onPressArrowRight(e) {
     this.moveSelectedCell(e, 0, 1);
   },
 
-  onPressTab(e: SyntheticEvent) {
+  onPressTab(e) {
     this.moveSelectedCell(e, 0, e.shiftKey ? -1 : 1);
   },
 
-  onPressEnter(e: SyntheticKeyboardEvent) {
+  onPressEnter(e) {
     this.setActive(e.key);
   },
 
-  onPressDelete(e: SyntheticKeyboardEvent) {
+  onPressDelete(e) {
     this.setActive(e.key);
   },
 
-  onPressEscape(e: SyntheticKeyboardEvent) {
+  onPressEscape(e) {
     this.setInactive(e.key);
     this.handleCancelCopy();
   },
 
-  onPressBackspace(e: SyntheticKeyboardEvent) {
+  onPressBackspace(e) {
     this.setActive(e.key);
   },
 
-  onPressChar(e: SyntheticKeyboardEvent) {
+  onPressChar(e) {
     if (this.isKeyPrintable(e.keyCode)) {
       this.setActive(e.keyCode);
     }
   },
 
-  onPressKeyWithCtrl(e: SyntheticKeyboardEvent) {
+  onPressKeyWithCtrl(e) {
     let keys = {
       KeyCode_c: 99,
       KeyCode_C: 67,
@@ -310,7 +356,7 @@ const ReactDataGrid = createReactClass({
     this.props.onGridRowsUpdated({cellKey, fromRow, toRow, fromRowId, toRowId, rowIds, updated, action, fromRowData});
   },
 
-  onCellCommit(commit: RowUpdateEvent) {
+  onCellCommit(commit) {
     let selected = Object.assign({}, this.state.selected);
     selected.active = false;
     if (commit.key === 'Tab') {
@@ -333,7 +379,7 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  onDragStart(e: SyntheticEvent) {
+  onDragStart(e) {
     let idx = this.state.selected.idx;
     // To prevent dragging down/up when reordering rows.
     const isViewportDragging = e && e.target && e.target.className;
@@ -391,7 +437,7 @@ const ReactDataGrid = createReactClass({
       && rowIdx < this.props.rowsCount;
   },
 
-  handleDragStart(dragged: DraggedType) {
+  handleDragStart(dragged) {
     if (!this.dragEnabled()) { return; }
     if (this.isCellWithinBounds(dragged)) {
       this.setState({ dragged: dragged });
@@ -416,7 +462,7 @@ const ReactDataGrid = createReactClass({
     this.setState({dragged: {complete: true}});
   },
 
-  handleDragEnter(row: any) {
+  handleDragEnter(row) {
     if (!this.dragEnabled() || this.state.dragged == null) { return; }
     let dragged = this.state.dragged;
     dragged.overRowIdx = row;
@@ -449,7 +495,7 @@ const ReactDataGrid = createReactClass({
     this.setState({copied: null});
   },
 
-  handleCopy(args: {value: string}) {
+  handleCopy(args) {
     if (!this.copyPasteEnabled()) { return; }
     let textToCopy = args.value;
     let selected = this.state.selected;
@@ -457,7 +503,7 @@ const ReactDataGrid = createReactClass({
     this.setState({textToCopy: textToCopy, copied: copied});
   },
 
-  handleSort: function(columnKey: string, direction: SortType) {
+  handleSort: function(columnKey, direction) {
     this.setState({sortDirection: direction, sortColumn: columnKey}, function() {
       this.props.onGridSort(columnKey, direction);
     });
@@ -544,7 +590,7 @@ const ReactDataGrid = createReactClass({
 
   // columnKey not used here as this function will select the whole row,
   // but needed to match the function signature in the CheckboxEditor
-  handleRowSelect(rowIdx: number, columnKey: string, rowData, e: Event) {
+  handleRowSelect(rowIdx, columnKey, rowData, e) {
     e.stopPropagation();
 
     if (this.useNewRowSelection()) {
@@ -571,7 +617,7 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  handleCheckboxChange: function(e: SyntheticEvent) {
+  handleCheckboxChange: function(e) {
     let allRowsSelected;
     if (e.currentTarget instanceof HTMLInputElement && e.currentTarget.checked === true) {
       allRowsSelected = true;
@@ -628,13 +674,13 @@ const ReactDataGrid = createReactClass({
     this.setState({scrollOffset: scrollOffset});
   },
 
-  getRowOffsetHeight(): number {
+  getRowOffsetHeight() {
     let offsetHeight = 0;
     this.getHeaderRows().forEach((row) => offsetHeight += parseFloat(row.height, 10) );
     return offsetHeight;
   },
 
-  getHeaderRows(): Array<{ref: Function; height: number;}> {
+  getHeaderRows() {
     let rows = [{ ref: (node) => this.row = node, height: this.props.headerRowHeight || this.props.rowHeight, rowType: 'header' }];
     if (this.state.canFilter === true) {
       rows.push({
@@ -680,7 +726,7 @@ const ReactDataGrid = createReactClass({
     return RowUtils.get(row, cellKey);
   },
 
-  moveSelectedCell(e: SyntheticEvent, rowDelta: number, cellDelta: number) {
+  moveSelectedCell(e, rowDelta, cellDelta) {
     // we need to prevent default as we control grid scroll
     // otherwise it moves every time you left/right which is janky
     e.preventDefault();
@@ -709,7 +755,7 @@ const ReactDataGrid = createReactClass({
     return this._gridNode;
   },
 
-  calculateNextSelectionPosition(cellNavigationMode: string, cellDelta: number, rowDelta: number) {
+  calculateNextSelectionPosition(cellNavigationMode, cellDelta, rowDelta) {
     let _rowDelta = rowDelta;
     let idx = this.state.selected.idx + cellDelta;
     const nbrColumns = this.getNbrColumns();
@@ -808,7 +854,7 @@ const ReactDataGrid = createReactClass({
     this.setState({selected});
   },
 
-  setActive(keyPressed: string) {
+  setActive(keyPressed) {
     let rowIdx = this.state.selected.rowIdx;
     let row = this.props.rowGetter(rowIdx);
 
@@ -846,11 +892,11 @@ const ReactDataGrid = createReactClass({
     }
   },
 
-  isActive(): boolean {
+  isActive() {
     return this.state.selected.active === true;
   },
 
-  setupGridColumns: function(props = this.props): Array<any> {
+  setupGridColumns: function(props = this.props) {
     const { columns } = props;
     if (this._cachedColumns === columns) {
       return this._cachedComputedColumns;
@@ -887,15 +933,15 @@ const ReactDataGrid = createReactClass({
     return this._cachedComputedColumns;
   },
 
-  copyPasteEnabled: function(): boolean {
+  copyPasteEnabled: function() {
     return this.props.onCellCopyPaste !== null;
   },
 
-  dragEnabled: function(): boolean {
+  dragEnabled: function() {
     return this.props.onGridRowsUpdated !== undefined || this.props.onCellsDragged !== undefined;
   },
 
-  renderToolbar(): ReactElement {
+  renderToolbar() {
     let Toolbar = this.props.toolbar;
     let toolBarProps =  {columns: this.props.columns, onToggleFilter: this.onToggleFilter, numberOfRows: this.props.rowsCount};
     if (React.isValidElement(Toolbar)) {
@@ -930,12 +976,12 @@ const ReactDataGrid = createReactClass({
       getCellActions: this.props.getCellActions,
       onDeleteSubRow: this.props.onDeleteSubRow,
       onAddSubRow: this.props.onAddSubRow,
-      isScrollingVerticallyWithKeyboard: this.isKeyDown(KeyCodes.DownArrow) || this.isKeyDown(KeyCodes.UpArrow),
-      isScrollingHorizontallyWithKeyboard: this.isKeyDown(KeyCodes.LeftArrow) || this.isKeyDown(KeyCodes.RightArrow) || this.isKeyDown(KeyCodes.Tab)
+      isScrollingVerticallyWithKeyboard: this.props.isKeyDown(KeyCodes.DownArrow) || this.props.isKeyDown(KeyCodes.UpArrow),
+      isScrollingHorizontallyWithKeyboard: this.props.isKeyDown(KeyCodes.LeftArrow) || this.props.isKeyDown(KeyCodes.RightArrow) || this.props.isKeyDown(KeyCodes.Tab)
     };
 
     let toolbar = this.renderToolbar();
-    let containerWidth = this.props.minWidth || this.DOMMetrics.gridWidth();
+    let containerWidth = this.props.minWidth || this.gridWidth();
     let gridWidth = containerWidth - this.state.scrollOffset;
 
     // depending on the current lifecycle stage, gridWidth() may not initialize correctly
@@ -987,4 +1033,4 @@ const ReactDataGrid = createReactClass({
 });
 
 
-module.exports = ReactDataGrid;
+module.exports = keyboardHandler(ReactDataGrid);

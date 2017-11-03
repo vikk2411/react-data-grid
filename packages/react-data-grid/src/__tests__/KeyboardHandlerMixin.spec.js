@@ -2,12 +2,12 @@ import React from 'react';
 import createReactClass from 'create-react-class';
 import ReactDOM from 'react-dom';
 import TestUtils from 'react-addons-test-utils';
-import KeyboardHandlerMixin from '../KeyboardHandlerMixin';
+import KeyboardHandler from '../KeyboardHandler';
 
 
 let TestComponent = createReactClass({
   displayName: 'TestComponent',
-  mixins: [KeyboardHandlerMixin],
+  mixins: [KeyboardHandler],
 
   render: function() {
     return (
@@ -16,7 +16,7 @@ let TestComponent = createReactClass({
   }
 });
 
-describe('KeyboardHandlerMixin', () => {
+describe('KeyboardHandler', () => {
   it('renders', () => {
     let component = TestUtils.renderIntoDocument(<TestComponent/>);
     expect(component).toBeDefined();

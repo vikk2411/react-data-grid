@@ -1,23 +1,22 @@
-const React                = require('react');
-const Canvas               = require('./Canvas');
-const cellMetaDataShape    = require('./PropTypeShapes/CellMetaDataShape');
-const PropTypes            = React.PropTypes;
+const React = require('react');
+const Canvas = require('./Canvas');
+const cellMetaDataShape = require('./PropTypeShapes/CellMetaDataShape');
+const PropTypes = React.PropTypes;
 import ColumnUtils from './ColumnUtils';
 const ReactDOM = require('react-dom');
-const DOMMetrics = require('./DOMMetrics');
 const min = Math.min;
 const max = Math.max;
 const floor = Math.floor;
 const ceil = Math.ceil;
 
 const Viewport = React.createClass({
-  mixins: [DOMMetrics.MetricsMixin],
-
   propTypes: {
     rowOffsetHeight: PropTypes.number.isRequired,
-    totalWidth: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+    totalWidth: PropTypes.oneOfType([PropTypes.number, PropTypes.string])
+      .isRequired,
     columnMetrics: PropTypes.object.isRequired,
-    rowGetter: PropTypes.oneOfType([PropTypes.array, PropTypes.func]).isRequired,
+    rowGetter: PropTypes.oneOfType([PropTypes.array, PropTypes.func])
+      .isRequired,
     selectedRows: PropTypes.array,
     rowSelection: PropTypes.oneOfType([
       PropTypes.shape({
@@ -67,10 +66,60 @@ const Viewport = React.createClass({
     return this.getGridState(this.props);
   },
 
+  contextTypes: {
+    metricsComputator: PropTypes.object
+  },
+
+  componentWillMount() {
+    if (this.DOMMetrics) {
+      this._DOMMetricsDefs = Object.assign({}, this.DOMMetrics);
+
+      this.DOMMetrics = {};
+      for (let name in this._DOMMetricsDefs) {
+        if (!this._DOMMetricsDefs.hasOwnProperty(name)) continue;
+
+        this.DOMMetrics[name] = () => {};
+      }
+    }
+  },
+
+  componentDidMount() {
+    if (this.DOMMetrics) {
+      this.DOMMetrics = this.registerMetrics(this._DOMMetricsDefs);
+    }
+  },
+
+  componentWillUnmount() {
+    if (!this.registerMetricsImpl) {
+      return this.context.metricsComputator.unregisterMetricsFor(this);
+    }
+    if (this.hasOwnProperty('DOMMetrics')) {
+      delete this.DOMMetrics;
+    }
+  },
+
+  registerMetrics(metrics) {
+    if (this.registerMetricsImpl) {
+      return this.registerMetricsImpl(this, metrics);
+    }
+
+    return this.context.metricsComputator.registerMetricsImpl(this, metrics);
+  },
+
+  getMetric(name) {
+    if (this.getMetricImpl) {
+      return this.getMetricImpl(name);
+    }
+
+    return this.context.metricsComputator.getMetricImpl(name);
+  },
+
   getGridState(props) {
     let totalNumberColumns = ColumnUtils.getSize(props.columnMetrics.columns);
     let canvasHeight = props.minHeight - props.rowOffsetHeight;
-    let renderedRowsCount = ceil((props.minHeight - props.rowHeight) / props.rowHeight);
+    let renderedRowsCount = ceil(
+      (props.minHeight - props.rowHeight) / props.rowHeight
+    );
     let totalRowCount = min(renderedRowsCount * 4, props.rowsCount);
     return {
       displayStart: 0,
@@ -88,14 +137,18 @@ const Viewport = React.createClass({
   },
 
   getRenderedColumnCount(displayStart, width) {
-    let remainingWidth = width && width > 0 ? width : this.props.columnMetrics.totalWidth;
+    let remainingWidth =
+      width && width > 0 ? width : this.props.columnMetrics.totalWidth;
     if (remainingWidth === 0) {
       remainingWidth = ReactDOM.findDOMNode(this).offsetWidth;
     }
     let columnIndex = displayStart;
     let columnCount = 0;
     while (remainingWidth > 0) {
-      let column = ColumnUtils.getColumn(this.props.columnMetrics.columns, columnIndex);
+      let column = ColumnUtils.getColumn(
+        this.props.columnMetrics.columns,
+        columnIndex
+      );
 
       if (!column) {
         break;
@@ -113,7 +166,10 @@ const Viewport = React.createClass({
     let columnIndex = -1;
     while (remainingScroll >= 0) {
       columnIndex++;
-      remainingScroll -= ColumnUtils.getColumn(this.props.columnMetrics.columns, columnIndex).width;
+      remainingScroll -= ColumnUtils.getColumn(
+        this.props.columnMetrics.columns,
+        columnIndex
+      ).width;
     }
     return columnIndex;
   },
@@ -150,12 +206,27 @@ const Viewport = React.createClass({
 
     let displayEnd = min(visibleEnd + this.props.overScan.rowsEnd, length);
 
-    let totalNumberColumns = ColumnUtils.getSize(this.props.columnMetrics.columns);
-    let colVisibleStart = (totalNumberColumns > 0) ? max(0, this.getVisibleColStart(scrollLeft)) : 0;
-    let renderedColumnCount = this.getRenderedColumnCount(colVisibleStart, width);
-    let colVisibleEnd = (renderedColumnCount !== 0) ? colVisibleStart + renderedColumnCount : totalNumberColumns;
-    let colDisplayStart = max(0, colVisibleStart - this.props.overScan.colsStart);
-    let colDisplayEnd = min(colVisibleEnd + this.props.overScan.colsEnd, totalNumberColumns);
+    let totalNumberColumns = ColumnUtils.getSize(
+      this.props.columnMetrics.columns
+    );
+    let colVisibleStart =
+      totalNumberColumns > 0 ? max(0, this.getVisibleColStart(scrollLeft)) : 0;
+    let renderedColumnCount = this.getRenderedColumnCount(
+      colVisibleStart,
+      width
+    );
+    let colVisibleEnd =
+      renderedColumnCount !== 0
+        ? colVisibleStart + renderedColumnCount
+        : totalNumberColumns;
+    let colDisplayStart = max(
+      0,
+      colVisibleStart - this.props.overScan.colsStart
+    );
+    let colDisplayEnd = min(
+      colVisibleEnd + this.props.overScan.colsEnd,
+      totalNumberColumns
+    );
 
     let nextScrollState = {
       visibleStart,
@@ -191,9 +262,12 @@ const Viewport = React.createClass({
   },
 
   componentWillReceiveProps(nextProps) {
-    if (this.props.rowHeight !== nextProps.rowHeight ||
+    if (
+      this.props.rowHeight !== nextProps.rowHeight ||
       this.props.minHeight !== nextProps.minHeight ||
-      ColumnUtils.getSize(this.props.columnMetrics.columns) !== ColumnUtils.getSize(nextProps.columnMetrics.columns)) {
+      ColumnUtils.getSize(this.props.columnMetrics.columns) !==
+        ColumnUtils.getSize(nextProps.columnMetrics.columns)
+    ) {
       this.setState(this.getGridState(nextProps));
     } else if (this.props.rowsCount !== nextProps.rowsCount) {
       this.updateScroll(
@@ -220,14 +294,18 @@ const Viewport = React.createClass({
 
   onScroll(scroll) {
     this.updateScroll(
-      scroll.scrollTop, scroll.scrollLeft,
+      scroll.scrollTop,
+      scroll.scrollLeft,
       this.state.height,
       this.props.rowHeight,
       this.props.rowsCount
     );
 
     if (this.props.onScroll) {
-      this.props.onScroll({scrollTop: scroll.scrollTop, scrollLeft: scroll.scrollLeft});
+      this.props.onScroll({
+        scrollTop: scroll.scrollTop,
+        scrollLeft: scroll.scrollLeft
+      });
     }
   },
 
@@ -250,11 +328,9 @@ const Viewport = React.createClass({
       top: this.props.rowOffsetHeight
     };
     return (
-      <div
-        className="react-grid-Viewport"
-        style={style}>
+      <div className='react-grid-Viewport' style={style}>
         <Canvas
-          ref={(node) => this.canvas = node}
+          ref={node => (this.canvas = node)}
           rowKey={this.props.rowKey}
           totalWidth={this.props.totalWidth}
           width={this.props.columnMetrics.width}
