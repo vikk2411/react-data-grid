@@ -1,5 +1,4 @@
 const React                = require('react');
-const createReactClass = require('create-react-class');
 const Canvas               = require('./Canvas');
 const cellMetaDataShape    = require('./PropTypeShapes/CellMetaDataShape');
 const PropTypes            = React.PropTypes;
@@ -10,14 +9,6 @@ const min = Math.min;
 const max = Math.max;
 const floor = Math.floor;
 const ceil = Math.ceil;
-
-type ViewportScrollState = {
-  displayStart: number;
-  displayEnd: number;
-  height: number;
-  scrollTop: number;
-  scrollLeft: number;
-};
 
 const Viewport = React.createClass({
   mixins: [DOMMetrics.MetricsMixin],
@@ -58,30 +49,25 @@ const Viewport = React.createClass({
   },
 
   DOMMetrics: {
-    viewportHeight(): number {
+    viewportHeight() {
       return ReactDOM.findDOMNode(this).offsetHeight;
     },
-    viewportWidth(): number {
+    viewportWidth() {
       return ReactDOM.findDOMNode(this).offsetWidth;
     }
   },
 
-  propTypes: {
-    rowHeight: React.PropTypes.number,
-    rowsCount: React.PropTypes.number.isRequired
-  },
-
-  getDefaultProps(): { rowHeight: number } {
+  getDefaultProps() {
     return {
       rowHeight: 30
     };
   },
 
-  getInitialState(): ViewportScrollState {
+  getInitialState() {
     return this.getGridState(this.props);
   },
 
-  getGridState(props: { rowHeight: number; rowsCount: number; minHeight: number }): ViewportScrollState {
+  getGridState(props) {
     let totalNumberColumns = ColumnUtils.getSize(props.columnMetrics.columns);
     let canvasHeight = props.minHeight - props.rowOffsetHeight;
     let renderedRowsCount = ceil((props.minHeight - props.rowHeight) / props.rowHeight);
@@ -150,7 +136,7 @@ const Viewport = React.createClass({
     });
   },
 
-  updateScroll(scrollTop: number, scrollLeft: number, height: number, rowHeight: number, length: number, width) {
+  updateScroll(scrollTop, scrollLeft, height, rowHeight, length, width) {
     let isScrolling = true;
     this.resetScrollStateAfterDelay();
 
@@ -204,7 +190,7 @@ const Viewport = React.createClass({
     }
   },
 
-  componentWillReceiveProps(nextProps: { rowHeight: number; rowsCount: number, rowOffsetHeight: number }) {
+  componentWillReceiveProps(nextProps) {
     if (this.props.rowHeight !== nextProps.rowHeight ||
       this.props.minHeight !== nextProps.minHeight ||
       ColumnUtils.getSize(this.props.columnMetrics.columns) !== ColumnUtils.getSize(nextProps.columnMetrics.columns)) {
@@ -232,7 +218,7 @@ const Viewport = React.createClass({
     }
   },
 
-  onScroll(scroll: {scrollTop: number; scrollLeft: number}) {
+  onScroll(scroll) {
     this.updateScroll(
       scroll.scrollTop, scroll.scrollLeft,
       this.state.height,
@@ -245,11 +231,11 @@ const Viewport = React.createClass({
     }
   },
 
-  getScroll(): {scrollLeft: number; scrollTop: number} {
+  getScroll() {
     return this.canvas.getScroll();
   },
 
-  setScrollLeft(scrollLeft: number) {
+  setScrollLeft(scrollLeft) {
     this.canvas.setScrollLeft(scrollLeft);
   },
 
