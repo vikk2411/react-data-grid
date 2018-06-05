@@ -239,6 +239,20 @@ class ReactDataGrid extends React.Component {
     }
   };
 
+  getRowsIds = (fromRow, toRow) => {
+    let rowIds = [];
+    const isReverse = fromRow > toRow;
+    const { start, end } = isReverse ?
+      { start: toRow, end: fromRow } :
+      { start: fromRow, end: toRow };
+    for (let i = start; i <= end; i++) {
+      rowIds.push(this.props.rowGetter(i)[this.props.rowKey]);
+      rowIds = isReverse ? rowIds.reverse() : rowIds;
+    }
+
+    return rowIds;
+  }
+
   metricsUpdated = () => {
     let columnMetrics = this.createColumnMetrics();
     this.setState({columnMetrics});
@@ -545,15 +559,10 @@ class ReactDataGrid extends React.Component {
   };
 
   onGridRowsUpdated = (cellKey, fromRow, toRow, updated, action, originRow) => {
-    let rowIds = [];
-
-    for (let i = fromRow; i <= toRow; i++) {
-      rowIds.push(this.props.rowGetter(i)[this.props.rowKey]);
-    }
-
-    let fromRowData = this.props.rowGetter(action === 'COPY_PASTE' ? originRow : fromRow);
-    let fromRowId = fromRowData[this.props.rowKey];
-    let toRowId = this.props.rowGetter(toRow)[this.props.rowKey];
+    const rowIds = this.getRowsIds(fromRow, toRow);
+    const fromRowData = this.props.rowGetter(action === 'COPY_PASTE' ? originRow : fromRow);
+    const fromRowId = fromRowData[this.props.rowKey];
+    const toRowId = this.props.rowGetter(toRow)[this.props.rowKey];
     this.props.onGridRowsUpdated({cellKey, fromRow, toRow, fromRowId, toRowId, rowIds, updated, action, fromRowData});
   };
 
@@ -647,11 +656,10 @@ class ReactDataGrid extends React.Component {
     const { selected, dragged } = this.state;
     const column = this.getColumn(this.state.selected.idx);
     if (selected && dragged && column) {
-      let cellKey = column.key;
-      let fromRow = selected.rowIdx < dragged.overRowIdx ? selected.rowIdx : dragged.overRowIdx;
-      let toRow   = selected.rowIdx > dragged.overRowIdx ? selected.rowIdx : dragged.overRowIdx;
+      const cellKey = column.key;
+      const { rowIdx: fromRow, overRowIdx: toRow } = selected;
       if (this.props.onCellsDragged) {
-        this.props.onCellsDragged({cellKey: cellKey, fromRow: fromRow, toRow: toRow, value: dragged.value});
+        this.props.onCellsDragged({cellKey, fromRow, toRow, value: dragged.value});
       }
       if (this.props.onGridRowsUpdated) {
         this.onGridRowsUpdated(cellKey, fromRow, toRow, {[cellKey]: dragged.value}, AppConstants.UpdateActions.CELL_DRAG);
