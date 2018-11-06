@@ -220,4 +220,4 @@ class Grid extends React.Component {
   }
 }
 
-module.exports = Grid;
+export default Grid;
