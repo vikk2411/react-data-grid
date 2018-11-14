@@ -1,3 +1,8 @@
+---
+id: changelog
+title: Changelog
+---
+
 ## 5.0.3 (Nov 1, 2018)
 - **Bugfix:** Fix frozen-columns source url ([1355](https://github.com/adazzle/react-data-grid/pull/1355))
 - **TechDebt:** Defining the ref callback as a bound method ([1353](https://github.com/adazzle/react-data-grid/pull/1353))
