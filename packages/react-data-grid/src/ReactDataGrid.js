@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import withStyles from 'isomorphic-style-loader/lib/withStyles';
 import {deprecate} from 'react-is-deprecated';
 import BaseGrid from './Grid';
 import CheckboxEditor from 'common/editors/CheckboxEditor';
@@ -13,7 +14,7 @@ const ColumnMetrics = require('./ColumnMetrics');
 import { CellNavigationMode, EventTypes, UpdateActions, HeaderRowType } from 'common/constants';
 import { EventBus } from './masks';
 
-require('../../../themes/react-data-grid-core.css');
+import s from '../../../themes/react-data-grid-core.css';
 require('../../../themes/react-data-grid-checkbox.css');
 
 if (!Object.assign) {
@@ -744,4 +745,4 @@ class ReactDataGrid extends React.Component {
   }
 }
 
-module.exports = ReactDataGrid;
+module.exports =  withStyles(s)(ReactDataGrid);
