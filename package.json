@@ -1,6 +1,7 @@
 {
-  "name": "react-data-grid",
-  "private": true,
+  "name": "@vikk2411/react-data-grid",
+  "version": "5.0.5",
+  "private": false,
   "description": "Data grid for React",
   "main": "src/index.js",
   "scripts": {
