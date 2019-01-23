@@ -1,4 +1,19 @@
-import { getMixedTypeValueRetriever, isImmutableCollection } from 'common/utils';
+import { isImmutableCollection } from 'common/utils';
+
+const getMixedTypeValueRetriever = (isImmutable) => {
+  let retObj = {};
+  const retriever = (item, key) => {
+    if(item[key] && item[key].sortValue) {
+      return item[key].sortValue
+    }
+    return item[key];
+  };
+  const immutableRetriever =  (immutable, key) => { return immutable.get(key); };
+
+  retObj.getValue = isImmutable ? immutableRetriever : retriever;
+
+  return retObj;
+}
 
 export const comparer = (a, b) => {
   if (a > b) {

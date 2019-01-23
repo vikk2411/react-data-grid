@@ -25,7 +25,12 @@ class RowGroup extends Component {
 
   render() {
     const lastColumn = last(this.props.columns);
-    const style = { width: lastColumn.left + lastColumn.width };
+
+    let style = {width: "100%"}
+    if(lastColumn){
+      style = {width: lastColumn.left + lastColumn.width};
+    }
+    // const style = { width: lastColumn.left + lastColumn.width };
 
     return (
       <div style={style} className="react-grid-row-group" onClick={this.onClick}>

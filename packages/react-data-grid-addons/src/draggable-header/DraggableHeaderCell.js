@@ -87,8 +87,8 @@ DraggableHeaderCell.propTypes = {
   children: PropTypes.element.isRequired
 };
 
-export default DragSource('Column', headerCellSource, collect)(
-  DropTarget('Column', target, targetCollect)(
+export default DragSource('column', headerCellSource, collect)(
+  DropTarget('column', target, targetCollect)(
     DraggableHeaderCell
   )
 );
